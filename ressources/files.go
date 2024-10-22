@@ -37,33 +37,32 @@ func HandleClient(conn net.Conn) {
 	for _, v := range backUp {
 		fmt.Fprint(conn, v)
 	}
-	time := time.Now()
 	users = append(users, User{Name: name, Conn: conn})
-	broadcastName(name)
+	broadcast("name", "", name)
 	for {
-		fmt.Fprintf(conn, "[%d-%.2d-%.2d %.2d:%.2d:%.2d][%s]:", time.Year(), time.Month(), time.Day(), time.Hour(), time.Minute(), time.Second(), name)
+		// time := time.Now()
+		// fmt.Fprintf(conn, "[%d-%.2d-%.2d %.2d:%.2d:%.2d][%s]:", time.Year(), time.Month(), time.Day(), time.Hour(), time.Minute(), time.Second(), name)
 		message, err := bufio.NewReader(conn).ReadString('\n')
 		if err != nil {
 			log.Println("Connection closed:", err)
 			return
 		}
-		broadcastMessage(message, name)
+		broadcast("message", message, name)
 	}
 }
 
-func broadcastName(name string) {
+func broadcast(eventType string, content string, senderName string) {
+	time := time.Now()
 	for _, user := range users {
-		if user.Name != name {
-			fmt.Fprintf(user.Conn, "\n%s has joined our chat...\n", name)
+		if eventType == "name" && user.Name != senderName {
+			fmt.Fprintf(user.Conn, "\n%s has joined our chat...\n", senderName)
+		} else if eventType == "message" && user.Name != senderName {
+			fmt.Fprintf(user.Conn, "\n[%d-%.2d-%.2d %.2d:%.2d:%.2d][%s]:%s", time.Year(), time.Month(), time.Day(), time.Hour(), time.Minute(), time.Second(), senderName, content)
 		}
+		fmt.Fprintf(user.Conn, "[%d-%.2d-%.2d %.2d:%.2d:%.2d][%s]:", time.Year(), time.Month(), time.Day(), time.Hour(), time.Minute(), time.Second(), user.Name)
 	}
-}
 
-func broadcastMessage(message string, senderName string) {
-	backUp = append(backUp, fmt.Sprintf("%s %s", senderName, message))
-	for _, user := range users {
-		if user.Name != senderName {
-			fmt.Fprintf(user.Conn, "%s: %s", senderName, message)
-		}
+	if eventType == "message" {
+		backUp = append(backUp, fmt.Sprintf("[%d-%.2d-%.2d %.2d:%.2d:%.2d][%s]:%s", time.Year(), time.Month(), time.Day(), time.Hour(), time.Minute(), time.Second(), senderName, content))
 	}
 }
