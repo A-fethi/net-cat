@@ -18,10 +18,11 @@ type User struct {
 }
 
 var (
-	chatLogo string
-	users    []User
-	backUp   []string
-	mu       sync.RWMutex
+	chatLogo  string
+	users     []User
+	backUp    []string
+	mu        sync.Mutex
+	logBackUp []string
 )
 
 func isValidName(name string) bool {
@@ -84,10 +85,21 @@ func removeUser(name string) {
 	}
 }
 
-func broadcast(eventType string, content string, senderName string) {
-	time := time.Now()
+func updateUserInList(oldName, newName string) {
 	mu.Lock()
 	defer mu.Unlock()
+	for i := range users {
+		if users[i].Name == oldName {
+			users[i].Name = newName
+			break
+		}
+	}
+}
+
+func broadcast(eventType string, content string, senderName string) {
+	mu.Lock()
+	defer mu.Unlock()
+	time := time.Now()
 	for _, user := range users {
 		if eventType == "name" && user.Name != senderName {
 			fmt.Fprintf(user.Conn, "\n%s has joined our chat...\n", senderName)
@@ -95,24 +107,30 @@ func broadcast(eventType string, content string, senderName string) {
 			fmt.Fprintf(user.Conn, "\n[%d-%.2d-%.2d %.2d:%.2d:%.2d][%s]:%s", time.Year(), time.Month(), time.Day(), time.Hour(), time.Minute(), time.Second(), senderName, content)
 		} else if eventType == "leave" && user.Name != senderName {
 			fmt.Fprintf(user.Conn, "\n%s has left the chat\n", senderName)
+			logBackUp = append(logBackUp, fmt.Sprintf("%s has left the chat\n", senderName))
+		} else if eventType == "change" && user.Name != senderName {
+			fmt.Fprintf(user.Conn, "\n%s has changed their name to %s\n", content, senderName)
+			logBackUp = append(logBackUp, fmt.Sprintf("%s has changed their name to %s\n", content, senderName))
 		}
 		fmt.Fprintf(user.Conn, "[%d-%.2d-%.2d %.2d:%.2d:%.2d][%s]:", time.Year(), time.Month(), time.Day(), time.Hour(), time.Minute(), time.Second(), user.Name)
 	}
 
 	if eventType == "message" && content != "" {
 		backUp = append(backUp, fmt.Sprintf("[%d-%.2d-%.2d %.2d:%.2d:%.2d][%s]:%s", time.Year(), time.Month(), time.Day(), time.Hour(), time.Minute(), time.Second(), senderName, content))
+	} else if (eventType == "change" || eventType == "leave") && content != "" {
+		backUp = append(backUp, logBackUp...)
 	}
 }
 
 func HandleClient(conn net.Conn) {
-	mu.RLock()
+	mu.Lock()
 	if len(users) >= MaxUsers {
-		mu.RUnlock()
+		mu.Unlock()
 		fmt.Fprint(conn, "Sorry, the chat room is full (maximum 10 users). Please try again later.\n")
 		conn.Close()
 		return
 	}
-	mu.RUnlock()
+	mu.Unlock()
 
 	defer conn.Close()
 
@@ -126,15 +144,15 @@ func HandleClient(conn net.Conn) {
 	fmt.Fprint(conn, string([]byte(chatLogo)))
 	name, err := readValidName(conn)
 	if err != nil {
-		// log.Printf("Error reading name: %v", err)
+		log.Printf("Error reading name: %v", err)
 		return
 	}
 
-	mu.RLock()
+	mu.Lock()
 	for _, v := range backUp {
 		fmt.Fprint(conn, v)
 	}
-	mu.RUnlock()
+	mu.Unlock()
 
 	mu.Lock()
 	users = append(users, User{Name: name, Conn: conn})
@@ -142,32 +160,55 @@ func HandleClient(conn net.Conn) {
 
 	broadcast("name", "", name)
 
-	defer removeUser(name)
-	defer broadcast("leave", "", name)
-
 	for {
 		time := time.Now()
 		message, err := bufio.NewReader(conn).ReadString('\n')
 		if err != nil {
+			removeUser(name)
+			broadcast("leave", "", name)
 			return
 		}
 		if message != "\n" {
-			// isValid := true
+			if message == "--name\n" {
+				oldName := name
+				for {
+					fmt.Fprint(conn, "Please enter new username:")
+					newName, err := bufio.NewReader(conn).ReadString('\n')
+					if err != nil {
+						log.Printf("Error reading name: %v", err)
+						return
+					}
+					newName = strings.TrimSpace(newName)
 
-			// for i := 0; i < len(message); i++ {
-			// 	if !(message[i] >= 32 && message[i] <= 126) && message[i] != '\n' {
-			// 		isValid = false
-			// 		continue
-			// 	}
-			// }
-			// if isValid {
-			broadcast("message", message, name)
-			// } else {
-			// 	fmt.Fprint(conn, "Non printable ascii charachters not allowed")
-			// 	fmt.Fprintf(conn, "\n[%d-%.2d-%.2d %.2d:%.2d:%.2d][%s]:", time.Year(), time.Month(), time.Day(), time.Hour(), time.Minute(), time.Second(), name)
-			// }
+					if !isValidName(newName) {
+						fmt.Fprintln(conn, "Invalid name. Please try again.")
+						continue
+					}
+
+					mu.Lock()
+					nameExists := false
+					for _, user := range users {
+						if strings.EqualFold(user.Name, newName) {
+							nameExists = true
+							break
+						}
+					}
+					mu.Unlock()
+
+					if nameExists {
+						fmt.Fprintln(conn, "This name is already taken. Please choose another name.")
+						continue
+					}
+					name = newName
+					updateUserInList(oldName, newName)
+					broadcast("change", oldName, newName)
+					break
+				}
+			} else {
+				broadcast("message", message, name)
+			}
 		} else if len(message) == 1 {
-			fmt.Fprint(conn, "You cannot submit empty message")
+			fmt.Fprint(conn, "You cannot submit an empty message.")
 			fmt.Fprintf(conn, "\n[%d-%.2d-%.2d %.2d:%.2d:%.2d][%s]:", time.Year(), time.Month(), time.Day(), time.Hour(), time.Minute(), time.Second(), name)
 		}
 	}
