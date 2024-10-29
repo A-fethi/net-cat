@@ -11,6 +11,7 @@ import (
 
 const defaultPort = "8989"
 
+// Program entry point
 func main() {
 	port := defaultPort
 	if len(os.Args) == 2 {
@@ -21,10 +22,10 @@ func main() {
 	}
 
 	listener, err := net.Listen("tcp", ":"+port)
-	fmt.Println("Listening on localhost :" + port)
 	if err != nil {
 		log.Fatal(err)
 	}
+	fmt.Println("Listening on localhost :" + port)
 	defer listener.Close()
 	for {
 		conn, err := listener.Accept()

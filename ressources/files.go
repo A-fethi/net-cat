@@ -21,10 +21,11 @@ var (
 	chatLogo  string
 	users     []User
 	backUp    []string
-	mu        sync.Mutex
 	logBackUp []string
+	mu        sync.Mutex
 )
 
+// Checks if the name provided is a valid name
 func isValidName(name string) bool {
 	if len(strings.TrimSpace(name)) == 0 {
 		return false
@@ -41,6 +42,7 @@ func isValidName(name string) bool {
 	return true
 }
 
+// Reads the name, checks the name if valid using isValidName function, checks the name if already exists
 func readValidName(conn net.Conn) (string, error) {
 	reader := bufio.NewReader(conn)
 	for {
@@ -74,6 +76,7 @@ func readValidName(conn net.Conn) (string, error) {
 	}
 }
 
+// Remove the user from the slice if logged out
 func removeUser(name string) {
 	mu.Lock()
 	defer mu.Unlock()
@@ -85,6 +88,7 @@ func removeUser(name string) {
 	}
 }
 
+// Updates the name when the user change their name
 func updateUserInList(oldName, newName string) {
 	mu.Lock()
 	defer mu.Unlock()
@@ -96,6 +100,7 @@ func updateUserInList(oldName, newName string) {
 	}
 }
 
+// broadcast sends notifications of various events (join, message, leave, change) to all users in the chat.
 func broadcast(eventType string, content string, senderName string) {
 	mu.Lock()
 	defer mu.Unlock()
@@ -122,6 +127,7 @@ func broadcast(eventType string, content string, senderName string) {
 	}
 }
 
+// HandleClient manages the interaction with a connected client, including name validation and message handling.
 func HandleClient(conn net.Conn) {
 	mu.Lock()
 	if len(users) >= MaxUsers {
