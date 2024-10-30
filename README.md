@@ -1,90 +1,119 @@
-To implement your TCP chat application in Go following the specified requirements, you can break down the project into clear steps. Here’s a structured approach with suggested tools and practices for each step:
+# TCP Chat Application in Go (NETCAT)
 
-1. Set Up Your Go Environment
-- Action: Ensure you have Go installed and set up a new project directory.
-- Tools: Go modules (go mod init).
-2. Define Your Project Structure
-- Action: Create directories and files for your server, client, and any utility functions.
-- Structure:
+This project is a NetCat-like TCP chat application built in Go, designed to support server-client communication over TCP with a simple group chat interface. The application can operate in server mode to accept incoming connections on a specified port or in client mode, where it connects to a server to join the chat. It includes concurrency control, message broadcasting, and client connection management.
+
+## Table of Contents
+
+- [About the Project](#about-the-project)
+- [Features](#features)
+- [Usage](#usage)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Usage Instructions](#usage-instructions)
+- [Error Handling](#error-handling)
+
+---
+
+## About the Project
+
+This application is a NetCat (nc) inspired tool that supports multiple clients in a TCP-based chat server. Each client connecting to the server is prompted for a username, after which they can send messages to all other clients connected to the server. Incoming and outgoing messages are timestamped, and clients are notified when others join or leave the chat. The server maintains a history of messages, which new clients receive upon connection, and supports a maximum of 10 concurrent clients.
+
+## Features
+
+- **TCP Server-Client Architecture**: Allows multiple clients to connect to a single server.
+- **Client Identification**: Each client must provide a non-empty name.
+- **Connection Control**: Maximum of 10 clients at a time.
+- **Message Broadcasting**: All clients can send and receive messages.
+- **Timestamped Messages**: Displays the sender’s name and timestamp with each message.
+- **Connection Notifications**: Notifies all clients when someone joins or leaves the chat.
+- **Message History**: New clients receive previous messages upon connection.
+- **Default and Custom Ports**: Listens on port 8989 by default but can be customized.
+- **Enhanced with Concurrency**: Uses goroutines and mutexes for concurrent handling.
+- **Error Handling**: Robust error handling on both server and client sides.
+
+## Requirements
+
+- Go version 1.15+
+- Network access for TCP/IP communication
+
+## Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/A-fethi/net-cat.git
+   cd net-cat
+   ```
+
+2. Compile the project:
+   ```bash
+   go build -o TCPChat
+   ```
+
+## Usage
+
+Start the server:
+
 ```bash
-/TCPChat
-    /cmd
-        /server
-            main.go
-        /client
-            main.go
-    /pkg
-        chat.go
-        logger.go
+$ ./TCPChat
+Listening on port :8989
 ```
-3. Implement the TCP Server
-- Action: Create a TCP server that listens for incoming connections.
-- Tools: Use the net package.
-- Steps:
-    * Use net.Listen to create a listener on the specified port (default to 8989).
-    * Accept connections with listener.Accept() in a loop.
-4. Handle Client Connections
-- Action: Use goroutines to handle multiple client connections concurrently.
-- Tools: Goroutines, channels.
-- Steps:
-    * For each accepted connection, spawn a new goroutine to handle client interaction.
-    * Maintain a slice or map to track connected clients.
-5. Client Registration and Message Handling
-- Action: Require clients to enter a name upon connection and handle incoming messages.
-- Tools: Use buffered I/O (bufio) to read input.
-- Steps:
-    * Send the Linux logo and prompt for a name.
-    * Store client names and ensure they are non-empty.
-    * Implement message handling logic to send and receive messages from other clients.
-6. Broadcasting Messages
-- Action: Implement message broadcasting to all connected clients.
-- Tools: Channels for message passing.
-- Steps:
-    * Create a message struct that includes timestamp, username, and message content.
-    * Broadcast messages to all clients using a dedicated channel.
-7. Manage Client Join/Leave Notifications
-- Action: Notify all clients when a new client joins or leaves the chat.
-- Steps:
-    * On client join, broadcast a message to all existing clients.
-    * On client disconnect, broadcast a leave message.
-8. Sending Historical Messages to New Clients
-- Action: Store messages in memory and send them to newly connected clients.
-- Tools: Slice to store messages.
--Steps:
-    * Maintain a slice of message structs.
-    * When a new client connects, send them the stored messages.
-9. Handle Disconnections Gracefully
-- Action: Ensure that when a client disconnects, others remain connected.
-- Steps:
-    * Use a defer statement to clean up and remove the client from the list of connected clients upon disconnect.
-10. Command-Line Argument Parsing
-- Action: Allow users to specify a port or default to 8989.
-- Tools: Use os.Args for command-line arguments.
-- Steps:
-    * Check for the correct number of arguments and parse the port number.
-11. Implement Logging
-- Action: Create a logger to log messages and events.
-- Tools: Use the log package.
-- Steps:
-    * Write logs to a file for all messages and connection events.
-12. Create the Client
-- Action: Implement the client that connects to the server and sends messages.
-- Tools: Similar to server; use net and bufio.
-- Steps:
-    * Connect to the server and prompt the user for their name.
-    * Read user input and send it to the server.
-    * Receive messages from the server and display them.
-13. Testing
-- Action: Write unit tests for both server and client components.
-- Tools: Use Go’s testing framework.
-- Steps:
-    * Write tests for connection handling, message broadcasting, and client registration.
-14. Bonus Features (Optional)
-- Terminal UI: If desired, integrate a terminal UI using gocui.
-- Group Chats: Implement logic to handle multiple chat groups by using maps or separate channels.
-15. Error Handling
-- Action: Ensure robust error handling throughout the application.
-- Steps:
-    * Check for errors on all network operations and handle them appropriately.
-## Conclusion
-Follow this structured approach, focusing on one step at a time, and utilize Go's concurrency features effectively. This will help you meet all the requirements while following good programming practices.
+
+Or specify a custom port:
+
+```bash
+$ ./TCPChat 2525
+Listening on port :2525
+```
+
+Connect to the server as a client:
+
+```bash
+$ nc localhost 8989
+```
+
+Example interaction:
+```plaintext
+Welcome to TCP-Chat!
+         _nnnn_
+        dGGGGMMb
+       @p~qp~~qMb
+       M|@||@) M|
+       @,----.JM|
+      JS^\__/  qKL
+     dZP        qKRb
+    dZP          qKKb
+   fZP            SMMb
+   HZM            MMMM
+   FqM            MMMM
+ __| ".        |\dS"qML
+ |    `.       | `' \Zq
+_)      \.___.,|     .'
+\____   )MMMMMP|   .'
+     `-'       `--'
+[ENTER YOUR NAME]: afethi
+[2023-01-20 16:03:43][afethi]: Hello everyone!
+```
+
+## Usage Instructions
+
+1. Run the server to start listening for incoming client connections.
+2. Each client must enter a unique, non-empty name to join the chat.
+3. Messages are broadcast to all clients, including timestamps and usernames.
+4. Type a message and press Enter to send.
+5. Type `Ctrl+C` to exit the chat.
+
+**Usage Errors**:
+If the port is not specified correctly, the program will respond with:
+```plaintext
+[USAGE]: ./TCPChat $port
+```
+
+## Error Handling
+
+- **Server-Side**: Handles client connection errors, limiting connections to 10.
+- **Client-Side**: Checks for empty names on connection, prevents sending of empty messages.
+- **Network Disruptions**: Connections automatically handle leaving clients, notifying remaining users.
+
+---
+
+**Note**: This application stores a chat history in memory and does not persist it across sessions.
