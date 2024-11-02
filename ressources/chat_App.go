@@ -18,11 +18,11 @@ type User struct {
 }
 
 var (
-	chatLogo  string
-	users     []User
-	backUp    []string
-	logBackUp []string
-	mu        sync.Mutex
+	chatLogo   string
+	users      []User
+	backUp     []string
+	logBackUp  []string
+	mu         sync.Mutex
 )
 
 // Checks if the name provided is a valid name
@@ -42,6 +42,13 @@ func isValidName(name string) bool {
 	return true
 }
 
+func invalidName(conn net.Conn) {
+	fmt.Fprintln(conn, "Invalid name. Name must:")
+	fmt.Fprintln(conn, "- Not be empty")
+	fmt.Fprintln(conn, "- Only contain letters, numbers, underscore (_), or hyphen (-)")
+	fmt.Fprintln(conn, "Please try again.")
+}
+
 // Reads the name, checks the name if valid using isValidName function, checks the name if already exists
 func readValidName(conn net.Conn) (string, error) {
 	reader := bufio.NewReader(conn)
@@ -53,10 +60,7 @@ func readValidName(conn net.Conn) (string, error) {
 		}
 		name = strings.TrimSpace(name)
 		if !isValidName(name) {
-			fmt.Fprintln(conn, "\nInvalid name. Name must:")
-			fmt.Fprintln(conn, "- Not be empty")
-			fmt.Fprintln(conn, "- Only contain letters, numbers, underscore (_), or hyphen (-)")
-			fmt.Fprintln(conn, "Please try again.")
+			invalidName(conn)
 			continue
 		}
 		mu.Lock()
@@ -70,6 +74,7 @@ func readValidName(conn net.Conn) (string, error) {
 		mu.Unlock()
 		if nameExists {
 			fmt.Fprintln(conn, "This name is already taken. Please choose another name.")
+			log.Printf("Client fails to change their name %s: %s", conn.RemoteAddr().String(), "("+name+")")
 			continue
 		}
 		return name, nil
@@ -133,6 +138,7 @@ func HandleClient(conn net.Conn) {
 	if len(users) >= MaxUsers {
 		mu.Unlock()
 		fmt.Fprint(conn, "Sorry, the chat room is full (maximum 10 users). Please try again later.\n")
+		log.Printf("Server reaches the maximum users")
 		conn.Close()
 		return
 	}
@@ -145,6 +151,7 @@ func HandleClient(conn net.Conn) {
 	chatLogo, err = LoadChatLogo("./ressources/welcome.txt")
 	if err != nil {
 		log.Fatalf("Error loading chat logo: %v", err)
+		log.Printf("Error loading chat logo: %v", err)
 		return
 	}
 	fmt.Fprint(conn, string([]byte(chatLogo)))
@@ -165,6 +172,7 @@ func HandleClient(conn net.Conn) {
 	mu.Unlock()
 
 	broadcast("name", "", name)
+	log.Printf("New client connected: %s %s", conn.RemoteAddr(), "("+name+")")
 
 	for {
 		time := time.Now()
@@ -172,6 +180,7 @@ func HandleClient(conn net.Conn) {
 		if err != nil {
 			removeUser(name)
 			broadcast("leave", "", name)
+			log.Printf("Client disconnected: %s %s", conn.RemoteAddr(), "("+name+")")
 			return
 		}
 		if message != "\n" {
@@ -179,6 +188,7 @@ func HandleClient(conn net.Conn) {
 				oldName := name
 				for {
 					fmt.Fprint(conn, "Please enter new username:")
+					log.Printf("Client tries to change their name: %s %s", conn.RemoteAddr(), "("+name+")")
 					newName, err := bufio.NewReader(conn).ReadString('\n')
 					if err != nil {
 						log.Printf("Error reading name: %v", err)
@@ -188,6 +198,7 @@ func HandleClient(conn net.Conn) {
 
 					if !isValidName(newName) {
 						fmt.Fprintln(conn, "Invalid name. Please try again.")
+						log.Printf("Client tries to enter an invalid name %s: %s", conn.RemoteAddr().String(), "("+name+")")
 						continue
 					}
 
@@ -203,18 +214,22 @@ func HandleClient(conn net.Conn) {
 
 					if nameExists {
 						fmt.Fprintln(conn, "This name is already taken. Please choose another name.")
+						log.Printf("Client fails to change their name %s: %s", conn.RemoteAddr().String(), "("+name+")")
 						continue
 					}
 					name = newName
 					updateUserInList(oldName, newName)
 					broadcast("change", oldName, newName)
+					log.Printf("Client %s %s changed their name succesfully to %s", conn.RemoteAddr(), "("+oldName+")", "("+newName+")")
 					break
 				}
 			} else {
 				broadcast("message", message, name)
+				log.Printf("Message received from %s %s: %s", conn.RemoteAddr().String(), "("+name+")", message)
 			}
 		} else if len(message) == 1 {
 			fmt.Fprint(conn, "You cannot submit an empty message.")
+			log.Printf("Client tries to send empty message %s: %s", conn.RemoteAddr().String(), "("+name+")")
 			fmt.Fprintf(conn, "\n[%d-%.2d-%.2d %.2d:%.2d:%.2d][%s]:", time.Year(), time.Month(), time.Day(), time.Hour(), time.Minute(), time.Second(), name)
 		}
 	}
