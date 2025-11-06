@@ -25,62 +25,6 @@ var (
 	mu         sync.Mutex
 )
 
-// Checks if the name provided is a valid name
-func isValidName(name string) bool {
-	if len(strings.TrimSpace(name)) == 0 {
-		return false
-	}
-
-	for _, char := range name {
-		if !((char >= 'a' && char <= 'z') ||
-			(char >= 'A' && char <= 'Z') ||
-			(char >= '0' && char <= '9') ||
-			char == '_' || char == '-') {
-			return false
-		}
-	}
-	return true
-}
-
-func invalidName(conn net.Conn) {
-	fmt.Fprintln(conn, "Invalid name. Name must:")
-	fmt.Fprintln(conn, "- Not be empty")
-	fmt.Fprintln(conn, "- Only contain letters, numbers, underscore (_), or hyphen (-)")
-	fmt.Fprintln(conn, "Please try again.")
-}
-
-// Reads the name, checks the name if valid using isValidName function, checks the name if already exists
-func readValidName(conn net.Conn) (string, error) {
-	reader := bufio.NewReader(conn)
-	for {
-		fmt.Fprint(conn, "[ENTER YOUR NAME]:")
-		name, err := reader.ReadString('\n')
-		if err != nil {
-			return "", err
-		}
-		name = strings.TrimSpace(name)
-		if !isValidName(name) {
-			invalidName(conn)
-			continue
-		}
-		mu.Lock()
-		nameExists := false
-		for _, user := range users {
-			if strings.EqualFold(user.Name, name) {
-				nameExists = true
-				break
-			}
-		}
-		mu.Unlock()
-		if nameExists {
-			fmt.Fprintln(conn, "This name is already taken. Please choose another name.")
-			log.Printf("Client fails to change their name %s: %s", conn.RemoteAddr().String(), "("+name+")")
-			continue
-		}
-		return name, nil
-	}
-}
-
 // Remove the user from the slice if logged out
 func removeUser(name string) {
 	mu.Lock()
@@ -136,10 +80,10 @@ func broadcast(eventType string, content string, senderName string) {
 func HandleClient(conn net.Conn) {
 	mu.Lock()
 	if len(users) >= MaxUsers {
-		mu.Unlock()
 		fmt.Fprint(conn, "Sorry, the chat room is full (maximum 10 users). Please try again later.\n")
 		log.Printf("Server reaches the maximum users")
 		conn.Close()
+		mu.Unlock()
 		return
 	}
 	mu.Unlock()
@@ -172,7 +116,7 @@ func HandleClient(conn net.Conn) {
 	mu.Unlock()
 
 	broadcast("name", "", name)
-	log.Printf("New client connected: %s %s", conn.RemoteAddr(), "("+name+")")
+	log.Printf("New client connected: %s %s", conn.RemoteAddr().String(), "("+name+")")
 
 	for {
 		time := time.Now()
@@ -180,7 +124,7 @@ func HandleClient(conn net.Conn) {
 		if err != nil {
 			removeUser(name)
 			broadcast("leave", "", name)
-			log.Printf("Client disconnected: %s %s", conn.RemoteAddr(), "("+name+")")
+			log.Printf("Client disconnected: %s %s", conn.RemoteAddr().String(), "("+name+")")
 			return
 		}
 		if message != "\n" {
@@ -188,7 +132,7 @@ func HandleClient(conn net.Conn) {
 				oldName := name
 				for {
 					fmt.Fprint(conn, "Please enter new username:")
-					log.Printf("Client tries to change their name: %s %s", conn.RemoteAddr(), "("+name+")")
+					log.Printf("Client tries to change their name: %s %s", conn.RemoteAddr().String(), "("+name+")")
 					newName, err := bufio.NewReader(conn).ReadString('\n')
 					if err != nil {
 						log.Printf("Error reading name: %v", err)
@@ -220,7 +164,7 @@ func HandleClient(conn net.Conn) {
 					name = newName
 					updateUserInList(oldName, newName)
 					broadcast("change", oldName, newName)
-					log.Printf("Client %s %s changed their name succesfully to %s", conn.RemoteAddr(), "("+oldName+")", "("+newName+")")
+					log.Printf("Client %s %s changed their name succesfully to %s", conn.RemoteAddr().String(), "("+oldName+")", "("+newName+")")
 					break
 				}
 			} else {
